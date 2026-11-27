@@ -1,0 +1,50 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Prepare project
+        run: |
+          mkdir -p app_src
+          for z in movie-brain-apk-v2.zip movie-brain-apk.zip *.zip; do
+            if [ -f "$z" ] && file "$z" | grep -qi "zip"; then
+              unzip -qo "$z" -d app_src || true
+            fi
+          done
+          if [ ! -f "app_src/settings.gradle" ] && [ -f "settings.gradle" ]; then
+            cp -r settings.gradle build.gradle gradle.properties gradle app app_src/ 2>/dev/null || true
+          fi
+          if [ ! -f "app_src/settings.gradle" ] && [ ! -f "app_src/settings.gradle.kts" ]; then
+            SG=$(find app_src -maxdepth 4 \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -n 1)
+            if [ -n "$SG" ]; then
+              PROJ_DIR=$(dirname "$SG")
+              cp -r "$PROJ_DIR"/. app_src/
+            fi
+          fi
+          ls -la app_src
+
+      - name: Build debug APK
+        working-directory: app_src
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: movie-brain-apk
+          path: app_src/app/build/outputs/apk/debug/app-debug.apk
+          
